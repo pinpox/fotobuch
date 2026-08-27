@@ -38,13 +38,9 @@ no accounts: photos and layout state never leave your browser.
 
 ## Running
 
-Use it at **<https://pinpox.github.io/fotobuch/>** (served from `main`
-via GitHub Pages) — photos and layout state stay in your browser.
-
-To self-host, serve `index.html`, `app.js` and `layouts.typ` with any
-static file host; there is no build step. It needs a proper origin
-(localhost or HTTPS; not `file://`) and network access on first compile
-to fetch the typst WASM module from a CDN.
+Use it at **<https://pinpox.github.io/fotobuch/>**, photos and layout state stay
+in your browser. To self-host, serve `index.html`, `app.js` and `layouts.typ`
+with any static file host, there is no build step.
 
 ## How it works
 
