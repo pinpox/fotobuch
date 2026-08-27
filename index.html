@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photobook builder</title>
+<style>
+  :root { --bg:#16181d; --panel:#1f232b; --line:#2e3440; --fg:#d8dee9; --dim:#7a8494; --acc:#88c0d0; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:13px/1.4 system-ui, sans-serif; background:var(--bg); color:var(--fg);
+         display:grid; grid-template-rows:auto auto 1fr; height:100vh; }
+
+  header { display:flex; gap:8px; align-items:center; padding:8px 12px; background:var(--panel);
+           border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  header h1 { font-size:14px; margin:0 12px 0 0; font-weight:600; }
+  select, button, input[type=text] { background:#262b35; color:var(--fg); border:1px solid var(--line);
+           border-radius:5px; padding:5px 10px; font:inherit; }
+  button { cursor:pointer; } button:hover { border-color:var(--acc); }
+  button.primary { background:var(--acc); color:#111; font-weight:600; }
+  button:disabled { opacity:.5; cursor:default; }
+  #status { color:var(--dim); margin-left:auto; white-space:pre-wrap; max-width:40em; }
+
+  #palette { display:flex; flex-wrap:wrap; gap:6px; padding:6px 12px; background:var(--panel);
+             border-bottom:1px solid var(--line); }
+  .lbtn { display:flex; flex-direction:column; align-items:center; gap:2px; padding:4px 6px 3px; }
+  .lbtn svg { width:58px; height:34px; display:block; }
+  .lbtn svg .pg { fill:#000; stroke:#4a5261; stroke-width:0.15; }
+  .lbtn svg rect:not(.pg) { fill:#8fa2bd; }
+  .lbtn:hover svg rect:not(.pg) { fill:var(--acc); }
+  .lbtn span { font-size:10px; color:var(--dim); }
+  .lbtn:hover span { color:var(--fg); }
+
+  main { display:grid; grid-template-columns:270px 1fr; min-height:0; }
+
+  /* photo tray */
+  #side { display:flex; flex-direction:column; min-height:0; border-right:1px solid var(--line); }
+  #traybar { display:flex; gap:6px; align-items:center; padding:6px 8px; color:var(--dim);
+             border-bottom:1px solid var(--line); }
+  #traybar select { flex:1; padding:2px 6px; }
+  #tray { flex:1; overflow-y:auto; padding:8px;
+          display:grid; grid-template-columns:1fr 1fr; gap:6px; align-content:start; }
+  #tray .hint { grid-column:1/-1; color:var(--dim); font-style:italic; padding:12px 4px; }
+  #tray .thumb { position:relative; height:70px; border-radius:4px; overflow:hidden;
+                 cursor:grab; outline:1px solid var(--line); }
+  #tray .thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+  #tray .thumb.portrait { height:124px; }
+  #tray .thumb.portrait img { object-fit:contain; background:#000; }
+  #tray .thumb.used { opacity:.35; }
+  #tray .thumb .n { position:absolute; left:0; bottom:0; right:0; font-size:9px; padding:1px 3px;
+                    background:rgba(0,0,0,.55); color:#cdd6e3; overflow:hidden; text-overflow:ellipsis; }
+  #tray .thumb .badge { position:absolute; top:2px; right:2px; background:var(--acc); color:#111;
+                    font-size:9px; font-weight:700; border-radius:8px; padding:0 5px; }
+  #tray .thumb .rots { position:absolute; top:2px; left:2px; display:none; gap:2px; }
+  #tray .thumb:hover .rots { display:flex; }
+  #tray .thumb .rots button { background:rgba(0,0,0,.6); color:#fff; border:0; border-radius:3px;
+                              font-size:11px; padding:0 5px; cursor:pointer; }
+  #tray .thumb .rots button:hover { background:var(--acc); color:#111; }
+
+  /* pages */
+  #pages { overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:18px;
+           align-items:flex-start; }
+  .pagecard { display:flex; flex-direction:column; gap:6px; width:fit-content; }
+  .pagehead { display:flex; gap:6px; align-items:center; color:var(--dim); }
+  .pagehead .lname { color:var(--fg); font-weight:600; }
+  .pagehead button { padding:1px 7px; font-size:12px; }
+  .pagehead .warn { color:#e06c75; }
+  .canvas { position:relative; background:#000; box-shadow:0 2px 12px rgba(0,0,0,.5); }
+  .canvas.blankpage::after { content:'blank'; position:absolute; inset:0; display:grid;
+                    place-items:center; color:#bbb; font-style:italic; }
+  .slot { position:absolute; overflow:hidden; background:#e8e8e8 url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><path d="M0 20L20 0" stroke="%23ccc"/></svg>');
+          outline:1px dashed #aaa; outline-offset:-1px; }
+  .slot .uframe { position:absolute; top:0; height:100%; overflow:hidden; display:block; }
+  .slot.bare { background:none; outline:none; }
+  .slot img { width:100%; height:100%; object-fit:cover; display:block;
+              cursor:grab; touch-action:none; user-select:none; }
+  .slot img:active { cursor:grabbing; }
+  .slot.framed { box-shadow:0 0 0 3px #fff; }
+  .slot.over { outline:3px solid var(--acc); z-index:5; }
+  .slot .rm, .slot .mv { position:absolute; top:2px; display:none; background:rgba(0,0,0,.6);
+              color:#fff; border:0; border-radius:3px; font-size:10px; padding:0 5px; cursor:pointer; }
+  .slot .rm { right:2px; }
+  .slot .mv { left:2px; cursor:grab; }
+  .slot:hover .rm, .slot:hover .mv { display:block; }
+  .caption input { width:100%; }
+  .guide { position:absolute; pointer-events:none; z-index:4; }
+  .g-trim { outline:1px solid rgba(230,60,60,.75); }
+  .g-safe { outline:1px dashed rgba(60,190,90,.75); }
+  body.noguides .guide { display:none; }
+  .spread { display:flex; gap:8px; align-items:flex-start; }
+  .placeholder { background:rgba(255,255,255,.04); outline:1px dashed var(--line);
+                 outline-offset:-1px; margin-top:33px; }
+  .gutter { position:absolute; top:0; bottom:0; width:0; border-left:1px dashed rgba(255,255,255,.4);
+            pointer-events:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Photobook builder</h1>
+  <button id="importBtn" class="primary">import photos</button>
+  <button id="compileBtn">compile PDF</button>
+  <button id="bundleBtn" title="zip with main.typ, layouts.typ, photos and a README — compile anywhere with typst">download bundle</button>
+  <button id="backupBtn" title="download the current book state as a JSON file">save backup</button>
+  <button id="restoreBtn" title="restore a previously downloaded backup">load backup</button>
+  <label id="guidesLbl" title="red = Endformat (trim), green dashed = 3mm Sicherheitsabstand">
+    <input type="checkbox" id="guidesChk" checked> guides</label>
+  <input id="importFile" type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" multiple hidden>
+  <input id="restoreFile" type="file" accept="application/json,.json" hidden>
+  <span id="status"></span>
+</header>
+<div id="palette"></div>
+<main>
+  <div id="side">
+    <div id="traybar">
+      <label for="sortSel">sort</label>
+      <select id="sortSel">
+        <option value="name">by file name</option>
+        <option value="date">by date</option>
+      </select>
+    </div>
+    <div id="tray"></div>
+  </div>
+  <div id="pages"></div>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
