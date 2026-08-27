@@ -6,9 +6,14 @@
 const $ = (s) => document.querySelector(s);
 const setStatus = (t) => { $('#status').textContent = t; };
 
-// ── geometry, parsed from layouts.typ at startup (all in cm) ─
-// layouts.typ is the single source of truth; the preview reads the
-// same constants the print template uses.
+// ── geometry (all in cm) ─────────────────────────────────────
+// bleed/inner come from layouts.typ; the trim size comes from the
+// selected print format and is patched into layouts.typ for compiling.
+const FORMATS = {
+  wide: { w: 18.7, h: 10.5, label: '16:9 \u2014 18.7 \u00d7 10.5 cm' },
+  a5l:  { w: 21.0, h: 14.8, label: 'A5 landscape \u2014 21 \u00d7 14.8 cm' },
+  a5p:  { w: 14.8, h: 21.0, label: 'A5 portrait \u2014 14.8 \u00d7 21 cm' },
+};
 let layoutsSrc = '';                       // template text, reused by compile/bundle
 let trimW, trimH, bleed, inner, pageW, pageH, m;
 const safety = 0.3; // Sicherheitsabstand, measured inward from the trim edge
@@ -22,11 +27,25 @@ function initGeometry(src) {
     if (!m) throw new Error(`cannot find ${name} in layouts.typ`);
     return parseFloat(m[1]) * (m[2] === 'mm' ? 0.1 : 1);
   };
-  trimW = cm('trim-w'); trimH = cm('trim-h');
   bleed = cm('bleed'); inner = cm('inner');
+}
+
+// apply the book's print format: recompute geometry, layouts, palette
+function applyFormat() {
+  const f = FORMATS[state.format] || FORMATS.wide;
+  trimW = f.w; trimH = f.h;
   pageW = trimW + 2*bleed; pageH = trimH + 2*bleed; m = bleed + inner;
   LAYOUTS = buildLayouts();
+  $('#palette').innerHTML = '';
+  buildPalette();
+  const sel = $('#fmtSel');
+  if (sel.value !== (state.format || 'wide')) sel.value = state.format || 'wide';
 }
+
+// layouts.typ with the selected trim size patched in
+const patchedLayouts = () => layoutsSrc
+  .replace(/#let trim-w\s*=\s*[\d.]+cm/, `#let trim-w = ${trimW}cm`)
+  .replace(/#let trim-h\s*=\s*[\d.]+cm/, `#let trim-h = ${trimH}cm`);
 
 const buildLayouts = () => ({
   full: { slots: [r(0, 0, pageW, pageH)] },
@@ -597,7 +616,7 @@ async function makeBundle() {
   if (missing.length) throw new Error(`missing photos: ${missing.join(', ')}`);
   const entries = [
     { name: 'main.typ', bytes: enc.encode(toTypst()) },
-    { name: 'layouts.typ', bytes: enc.encode(layoutsSrc) },
+    { name: 'layouts.typ', bytes: enc.encode(patchedLayouts()) },
     { name: 'book.json', bytes: enc.encode(JSON.stringify(state, null, 1)) },
     { name: 'README.md', bytes: enc.encode(bundleReadme()) },
   ];
@@ -626,7 +645,7 @@ async function compilePdf() {
   const $typst = await loadTypst();
   setStatus('preparing sources\u2026');
   await $typst.resetShadow();
-  await $typst.addSource('/layouts.typ', layoutsSrc);
+  await $typst.addSource('/layouts.typ', patchedLayouts());
   const used = usedImages();
   for (let i = 0; i < used.length; i++) {
     setStatus(`loading photos ${i + 1}/${used.length}\u2026`);
@@ -686,6 +705,7 @@ $('#restoreFile').addEventListener('change', async () => {
     for (const p of state.pages)
       p.slots = p.slots.map(s => typeof s === 'string' ? { img: s, fx: 50, fy: 50 } : s);
     uid = Math.max(0, ...state.pages.map(p => p.id || 0)) + 1;
+    applyFormat();
     render(); save();
     setStatus(`restored ${f.name}`);
   } catch (e) {
@@ -704,7 +724,15 @@ addEventListener('drop', (e) => {
 // ── init ─────────────────────────────────────────────────────
 (async () => {
   initGeometry(await fetch('layouts.typ').then(r => r.text()));
-  buildPalette();
+  for (const [id, f] of Object.entries(FORMATS)) {
+    const o = document.createElement('option');
+    o.value = id; o.textContent = f.label;
+    $('#fmtSel').appendChild(o);
+  }
+  $('#fmtSel').addEventListener('change', () => {
+    state.format = $('#fmtSel').value;
+    applyFormat(); render(); save();
+  });
   opfs = await navigator.storage.getDirectory();
   navigator.storage.persist?.();
   state = JSON.parse(localStorage.getItem(STATE_KEY) || '{"pages":[]}');
@@ -712,6 +740,7 @@ addEventListener('drop', (e) => {
   for (const p of state.pages)
     p.slots = p.slots.map(s => typeof s === 'string' ? { img: s, fx: 50, fy: 50 } : s);
   uid = Math.max(0, ...state.pages.map(p => p.id || 0)) + 1;
+  applyFormat();
   await loadImageIndex();
   $('#sortSel').value = localStorage.getItem('traySort') || 'name';
   $('#sortSel').addEventListener('change', () => {
