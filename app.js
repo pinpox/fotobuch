@@ -664,6 +664,10 @@ $('#bundleBtn').onclick = async () => {
   } catch (e) { setStatus(`bundle failed: ${e.message}`); }
   finally { $('#bundleBtn').disabled = false; }
 };
+$('#typBtn').onclick = () => {
+  download(new Blob([toTypst()], { type: 'text/plain' }), 'main.typ');
+  setStatus('downloaded main.typ');
+};
 $('#backupBtn').onclick = () => {
   const name = `photobook-${new Date().toISOString().slice(0, 19).replaceAll(':', '-')}.json`;
   download(new Blob([JSON.stringify(state, null, 1)], { type: 'application/json' }), name);
