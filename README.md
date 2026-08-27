@@ -7,6 +7,8 @@ no accounts: photos and layout state never leave your browser.
 
 ![](https://img.shields.io/badge/runtime-static%20site-informational)
 
+![Photobook builder](screenshot.png)
+
 ## Features
 
 - **20 page layouts** — full bleed, grids, bands, split screens,
